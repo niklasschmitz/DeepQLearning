@@ -4,7 +4,7 @@ from jax.experimental.stax import Dense, Conv, Relu, Flatten
 
 
 def DeepQNetwork():
-    weights_init, predict = stax.serial(
+    init_fun, predict_fun = stax.serial(
         Conv(32, (8, 8)), Relu,
         Conv(64, (4, 4)), Relu,
         Conv(128, (3, 3)), Relu,
@@ -12,4 +12,4 @@ def DeepQNetwork():
         Dense(512), Relu,
         Dense(6)
     )
-    return weights_init, predict
+    return init_fun, predict_fun
