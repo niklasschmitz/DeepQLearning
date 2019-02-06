@@ -1,4 +1,3 @@
-import jax.numpy as np
 from jax.experimental import stax
 from jax.experimental.stax import Dense, Conv, Relu, Flatten
 
