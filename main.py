@@ -3,16 +3,16 @@ from jax import jit, grad
 from jax.experimental import minmax
 import numpy as onp
 import gym
-from gym import wrappers
 
 from model import DeepQNetwork
 
 GAMMA = 0.95
-EPSILON = 1.0
+EPS_START = 1.0
 EPS_END = 0.05
 ALPHA = 0.001
 ACTION_SPACE = [0, 1, 2, 3, 4, 5]
 MEM_SIZE = 5000
+
 
 
 def store_transition(memory, mem_cnt, state, action, reward, state_):
@@ -24,15 +24,15 @@ def store_transition(memory, mem_cnt, state, action, reward, state_):
     return memory, mem_cnt
 
 
-def choose_action(observation, pred_Q_eval, params_Q_eval):
+def choose_action(observation, pred_Q, params_Q_eval, eps):
     rand = onp.random.random()
-    actions = pred_Q_eval(params_Q_eval, observation)
-    if rand < 1 - EPSILON:
-        action = np.max(actions)
+    actions = pred_Q(params_Q_eval, observation)
+    print(actions)
+    if rand < 1 - eps:
+        action = np.argmax(actions[1])
     else:
         action = onp.random.choice(ACTION_SPACE)
     return action
-
 
 
 def main():
@@ -41,67 +41,133 @@ def main():
     memory = []
     mem_cnt = 0
 
-    # fill memory with random interactions with the environment
-    while len(memory) < MEM_SIZE:
-        observation = env.reset()
-        done = False
-        while not done:
-            # 0 no action, 1 fire, 2 move right, 3 move left, 4 move right fire, 5 move left fire
-            action = env.action_space.sample()
-            observation_, reward, done, info = env.step(action)
-            if done and info['ale.lives'] == 0:
-                reward = -100
-            state = np.mean(observation[15:200, 30:125], axis=2)
-            state_ = np.mean(observation_[15:200, 30:125], axis=2)
-            memory, mem_cnt = store_transition(memory, mem_cnt, state, action, reward, state_)
-            observation = observation_
-    print('done initializing memory')
+    # # fill memory with random interactions with the environment
+    # while len(memory) < MEM_SIZE:
+    #     observation = env.reset()
+    #     done = False
+    #     while not done:
+    #         # 0 no action, 1 fire, 2 move right, 3 move left, 4 move right fire, 5 move left fire
+    #         action = env.action_space.sample()
+    #         observation_, reward, done, info = env.step(action)
+    #         if done and info['ale.lives'] == 0:
+    #             reward = -100
+    #         state = np.mean(observation[15:200, 30:125], axis=2, keepdims=True)
+    #         state_ = np.mean(observation_[15:200, 30:125], axis=2, keepdims=True)
+    #         memory, mem_cnt = store_transition(memory, mem_cnt, state, action, reward, state_)
+    #         observation = observation_
+    # print('done initializing memory')
 
-    # two seperate Q-Table approximations for Double Q-Learning
-    init_Q_eval, pred_Q_eval = DeepQNetwork()
-    init_Q_next, pred_Q_next = DeepQNetwork()
+    init_Q, pred_Q = DeepQNetwork()
 
-    # initialize parameters, not committing to a batch size
+    # two separate Q-Table approximations (eval and next) for Double Q-Learning
+    # initialize parameters, not committing to a batch size (NHWC)
     in_shape = (-1, 185, 95, 1)
-    _, params_Q_eval = init_Q_eval(in_shape)
-    _, params_Q_next = init_Q_next(in_shape)
+    _, params_Q_eval = init_Q(in_shape)
+    _, params_Q_next = init_Q(in_shape)
 
     opt_init, opt_update = minmax.rmsprop(ALPHA)
+
+    # Define a simple squared-error loss
+    def loss(params, batch):
+        inputs, targets = batch
+        predictions = pred_Q(params, inputs)
+        return np.sum((predictions - targets) ** 2)
+
+    # Define a compiled update step
+    @jit
+    def step(j, opt_state, batch):
+        params = minmax.get_params(opt_state)
+        g = grad(loss)(params, batch)
+        return opt_update(j, g, opt_state)
 
     scores = []
     eps_history = []
     num_games = 50
-    batch_size = 32
+    batch_size = 2 # 32
 
     steps = 0
+    eps = EPS_START
+    learn_step_counter = 0
+
+    def learn(j, params_Q_eval, params_Q_next):
+        opt_state_Q_eval = opt_init(params_Q_eval)
+
+        if mem_cnt + batch_size < MEM_SIZE:
+            mem_start = int(onp.random.choice(range(mem_cnt)))
+        else:
+            mem_start = int(onp.random.choice(range(MEM_SIZE - batch_size - 1)))
+        mini_batch = memory[mem_start : mem_start + batch_size]
+        mini_batch = onp.array(mini_batch)
+
+        input_states = onp.stack(tuple(mini_batch[:, 0][:]))
+        next_states = onp.stack(tuple(mini_batch[:, 3][:]))
+
+        print(']]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]')
+
+        print(input_states.shape)
+        print(next_states.shape)
+
+        predicted_Q = pred_Q(params_Q_eval, input_states)
+        predicted_Q_next = pred_Q(params_Q_next, next_states)
+
+        max_action = np.argmax(predicted_Q_next, axis=1)
+        rewards = np.array(list(mini_batch[:, 2]))
+
+        print(predicted_Q)
+        print(predicted_Q_next)
+        print(max_action)
+        print(rewards)
+
+        Q_target = onp.array(predicted_Q)
+        print(Q_target)
+        Q_target[:, max_action] = rewards + GAMMA*np.max(predicted_Q_next[0])
+
+        # batch = (inputs, targets)
+        opt_state_Q_eval = step(j, opt_state_Q_eval, (input_states, Q_target))
+        params_Q_eval = minmax.get_params(opt_state_Q_eval)
+
+        return params_Q_eval, params_Q_next
+
 
     for i in range(num_games):
-        print('starting game ', i + 1, 'epsilon: %.4f' % EPSILON)
-        eps_history.append(EPSILON)
+        print('starting game ', i + 1, 'epsilon: %.4f' % eps)
+        eps_history.append(eps)
         done = False
         observation = env.reset()
-        frames = [np.sum(observation[15:200, 30:125], axis=2)]
+        frames = [np.mean(observation[15:200, 30:125], axis=2, keepdims=True)]
         score = 0
         last_action = 0
         while not done:
+            j = 0
+            # only choose an action at every 3rd frame
             if len(frames) == 3:
-                action = choose_action(frames, pred_Q_eval, params_Q_eval)
+                action = choose_action(frames, pred_Q, params_Q_eval, eps)
                 steps += 1
                 frames = []
             else:
                 action = last_action
             observation_, reward, done, info = env.step(action)
             score += reward
-            frames.append(np.sum(observation_[15:200,30:125], axis=2))
+            frames.append(np.mean(observation_[15:200, 30:125], axis=2, keepdims=True))
             if done and info['ale.lives'] == 0:
                 reward = -100
-            store_transition(np.mean(observation[15:200, 30:125], axis=2), action, reward,
-                            np.mean(observation_[15:200, 30:125], axis=2))
+            memory, mem_cnt = store_transition(memory, mem_cnt,
+                                               np.mean(observation[15:200, 30:125], axis=2, keepdims=True),
+                                               action, reward,
+                                               np.mean(observation_[15:200, 30:125], axis=2, keepdims=True))
             observation = observation_
 
             # TODO learn step
+            params_Q_eval, params_Q_next = learn(j, params_Q_eval, params_Q_next)
+            j += 1
 
-            lastAction = action
+            if steps > 500:
+                if eps - 1e-4 > EPS_END:
+                    eps -= 1e-4
+                else:
+                    eps = EPS_END
+
+            last_action = action
         scores.append(score)
         print('score: ', score)
 
