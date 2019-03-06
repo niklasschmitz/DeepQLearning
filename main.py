@@ -64,7 +64,8 @@ def main():
 
     # two separate Q-Table approximations (eval and next) for Double Q-Learning
     # initialize parameters, not committing to a batch size (NHWC)
-    in_shape = (-1, 185, 95, 1)
+    # we choose 3 channels as we want to pass stacks of 3 consecutive frames
+    in_shape = (-1, 185, 95, 3)
     _, params_Q_eval = init_Q(in_shape)
     _, params_Q_next = init_Q(in_shape)
 
