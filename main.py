@@ -1,6 +1,6 @@
 import jax.numpy as np
 from jax import jit, grad
-from jax.experimental import minmax
+from jax.experimental import optimizers
 import numpy as onp
 import gym
 
@@ -13,6 +13,9 @@ ALPHA = 0.001
 ACTION_SPACE = [0, 1, 2, 3, 4, 5]
 MEM_SIZE = 5000
 
+
+def preprocess(observation):
+    return np.mean(observation[15:200, 30:125], axis=2, keepdims=True)
 
 
 def store_transition(memory, mem_cnt, state, action, reward, state_):
@@ -65,7 +68,7 @@ def main():
     _, params_Q_eval = init_Q(in_shape)
     _, params_Q_next = init_Q(in_shape)
 
-    opt_init, opt_update = minmax.rmsprop(ALPHA)
+    opt_init, opt_update = optimizers.rmsprop(ALPHA)
 
     # Define a simple squared-error loss
     def loss(params, batch):
@@ -76,14 +79,14 @@ def main():
     # Define a compiled update step
     @jit
     def step(j, opt_state, batch):
-        params = minmax.get_params(opt_state)
+        params = optimizers.get_params(opt_state)
         g = grad(loss)(params, batch)
         return opt_update(j, g, opt_state)
 
     scores = []
     eps_history = []
     num_games = 50
-    batch_size = 2 # 32
+    batch_size = 2  # 32
 
     steps = 0
     eps = EPS_START
@@ -96,16 +99,11 @@ def main():
             mem_start = int(onp.random.choice(range(mem_cnt)))
         else:
             mem_start = int(onp.random.choice(range(MEM_SIZE - batch_size - 1)))
-        mini_batch = memory[mem_start : mem_start + batch_size]
-        mini_batch = onp.array(mini_batch)
+        mini_batch = memory[mem_start: mem_start + batch_size]
+        mini_batch = np.array(mini_batch)
 
-        input_states = onp.stack(tuple(mini_batch[:, 0][:]))
-        next_states = onp.stack(tuple(mini_batch[:, 3][:]))
-
-        print(']]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]')
-
-        print(input_states.shape)
-        print(next_states.shape)
+        input_states = np.stack(tuple(mini_batch[:, 0][:]))
+        next_states = np.stack(tuple(mini_batch[:, 3][:]))
 
         predicted_Q = pred_Q(params_Q_eval, input_states)
         predicted_Q_next = pred_Q(params_Q_next, next_states)
@@ -113,28 +111,21 @@ def main():
         max_action = np.argmax(predicted_Q_next, axis=1)
         rewards = np.array(list(mini_batch[:, 2]))
 
-        print(predicted_Q)
-        print(predicted_Q_next)
-        print(max_action)
-        print(rewards)
-
         Q_target = onp.array(predicted_Q)
-        print(Q_target)
-        Q_target[:, max_action] = rewards + GAMMA*np.max(predicted_Q_next[0])
+        Q_target[:, max_action] = rewards + GAMMA * np.max(predicted_Q_next[0])
 
         # batch = (inputs, targets)
         opt_state_Q_eval = step(j, opt_state_Q_eval, (input_states, Q_target))
-        params_Q_eval = minmax.get_params(opt_state_Q_eval)
+        params_Q_eval = optimizers.get_params(opt_state_Q_eval)
 
         return params_Q_eval, params_Q_next
-
 
     for i in range(num_games):
         print('starting game ', i + 1, 'epsilon: %.4f' % eps)
         eps_history.append(eps)
         done = False
         observation = env.reset()
-        frames = [np.mean(observation[15:200, 30:125], axis=2, keepdims=True)]
+        frames = [preprocess(observation)]
         score = 0
         last_action = 0
         while not done:
@@ -148,13 +139,13 @@ def main():
                 action = last_action
             observation_, reward, done, info = env.step(action)
             score += reward
-            frames.append(np.mean(observation_[15:200, 30:125], axis=2, keepdims=True))
+            frames.append(preprocess(observation))
             if done and info['ale.lives'] == 0:
                 reward = -100
             memory, mem_cnt = store_transition(memory, mem_cnt,
-                                               np.mean(observation[15:200, 30:125], axis=2, keepdims=True),
+                                               preprocess(observation),
                                                action, reward,
-                                               np.mean(observation_[15:200, 30:125], axis=2, keepdims=True))
+                                               preprocess(observation_))
             observation = observation_
 
             # TODO learn step
