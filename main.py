@@ -44,21 +44,21 @@ def main():
     memory = []
     mem_cnt = 0
 
-    # # fill memory with random interactions with the environment
-    # while len(memory) < MEM_SIZE:
-    #     observation = env.reset()
-    #     done = False
-    #     while not done:
-    #         # 0 no action, 1 fire, 2 move right, 3 move left, 4 move right fire, 5 move left fire
-    #         action = env.action_space.sample()
-    #         observation_, reward, done, info = env.step(action)
-    #         if done and info['ale.lives'] == 0:
-    #             reward = -100
-    #         state = np.mean(observation[15:200, 30:125], axis=2, keepdims=True)
-    #         state_ = np.mean(observation_[15:200, 30:125], axis=2, keepdims=True)
-    #         memory, mem_cnt = store_transition(memory, mem_cnt, state, action, reward, state_)
-    #         observation = observation_
-    # print('done initializing memory')
+    # fill memory with random interactions with the environment
+    while len(memory) < MEM_SIZE:
+        observation = env.reset()
+        done = False
+        while not done:
+            # 0 no action, 1 fire, 2 move right, 3 move left, 4 move right fire, 5 move left fire
+            action = env.action_space.sample()
+            observation_, reward, done, info = env.step(action)
+            if done and info['ale.lives'] == 0:
+                reward = -100
+            state = preprocess(observation)
+            state_ = preprocess(observation_)
+            memory, mem_cnt = store_transition(memory, mem_cnt, state, action, reward, state_)
+            observation = observation_
+    print('done initializing memory')
 
     init_Q, pred_Q = DeepQNetwork()
 
