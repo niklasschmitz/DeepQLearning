@@ -15,7 +15,7 @@ MEM_SIZE = 5000
 
 
 def preprocess(observation):
-    return np.mean(observation[15:200, 30:125], axis=2, keepdims=True)
+    return np.mean(observation[15:200, 30:125], axis=2)
 
 
 def store_transition(memory, mem_cnt, state, action, reward, state_):
@@ -30,7 +30,6 @@ def store_transition(memory, mem_cnt, state, action, reward, state_):
 def choose_action(observation, pred_Q, params_Q_eval, eps):
     rand = onp.random.random()
     actions = pred_Q(params_Q_eval, observation)
-    print(actions)
     if rand < 1 - eps:
         action = np.argmax(actions[1])
     else:
@@ -47,6 +46,7 @@ def main():
     # fill memory with random interactions with the environment
     while len(memory) < MEM_SIZE:
         observation = env.reset()
+        frames = [observation]
         done = False
         while not done:
             # 0 no action, 1 fire, 2 move right, 3 move left, 4 move right fire, 5 move left fire
@@ -101,7 +101,6 @@ def main():
         else:
             mem_start = int(onp.random.choice(range(MEM_SIZE - batch_size - 1)))
         mini_batch = memory[mem_start: mem_start + batch_size]
-        mini_batch = np.array(mini_batch)
 
         input_states = np.stack(tuple(mini_batch[:, 0][:]))
         next_states = np.stack(tuple(mini_batch[:, 3][:]))
@@ -133,7 +132,7 @@ def main():
             j = 0
             # only choose an action at every 3rd frame
             if len(frames) == 3:
-                action = choose_action(frames, pred_Q, params_Q_eval, eps)
+                action = choose_action(np.stack(frames), pred_Q, params_Q_eval, eps)
                 steps += 1
                 frames = []
             else:
