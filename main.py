@@ -53,7 +53,7 @@ def main():
     # fill memory with random interactions with the environment
     while len(memory) < MEM_SIZE:
         observation = env.reset()
-        frames = deque([np.zeros((185, 95)) for i in range(STACK_SIZE)], maxlen=STACK_SIZE)
+        frames = deque([np.zeros((185, 95)) for _ in range(STACK_SIZE)], maxlen=STACK_SIZE)
         frames.append(preprocess(observation))
         state = stack_frames(frames)
         done = False
