@@ -3,6 +3,7 @@ from jax import jit, grad
 from jax.experimental import optimizers
 import numpy as onp
 import gym
+from collections import deque
 
 from model import DeepQNetwork
 
@@ -12,6 +13,7 @@ EPS_END = 0.05
 ALPHA = 0.001
 ACTION_SPACE = [0, 1, 2, 3, 4, 5]
 MEM_SIZE = 5000
+STACK_SIZE = 3  # number of consecutive frames to stack as input to the network
 
 
 def preprocess(observation):
@@ -37,6 +39,11 @@ def choose_action(observation, pred_Q, params_Q_eval, eps):
     return action
 
 
+def stack_frames(frames):
+    """ Takes a deque of frames and stacks them into a numpy array """
+    return np.stack(frames, axis=-1)
+
+
 def main():
     env = gym.make('SpaceInvaders-v0')
 
@@ -46,7 +53,9 @@ def main():
     # fill memory with random interactions with the environment
     while len(memory) < MEM_SIZE:
         observation = env.reset()
-        frames = [observation]
+        frames = deque([np.zeros((185, 95)) for i in range(STACK_SIZE)], maxlen=STACK_SIZE)
+        frames.append(preprocess(observation))
+        state = stack_frames(frames)
         done = False
         while not done:
             # 0 no action, 1 fire, 2 move right, 3 move left, 4 move right fire, 5 move left fire
@@ -54,10 +63,10 @@ def main():
             observation_, reward, done, info = env.step(action)
             if done and info['ale.lives'] == 0:
                 reward = -100
-            state = preprocess(observation)
-            state_ = preprocess(observation_)
+            frames.append(preprocess(observation_))
+            state_ = stack_frames(frames)
             memory, mem_cnt = store_transition(memory, mem_cnt, state, action, reward, state_)
-            observation = observation_
+            state = state_
     print('done initializing memory')
 
     init_Q, pred_Q = DeepQNetwork()
@@ -65,7 +74,7 @@ def main():
     # two separate Q-Table approximations (eval and next) for Double Q-Learning
     # initialize parameters, not committing to a batch size (NHWC)
     # we choose 3 channels as we want to pass stacks of 3 consecutive frames
-    in_shape = (-1, 185, 95, 3)
+    in_shape = (-1, 185, 95, STACK_SIZE)
     _, params_Q_eval = init_Q(in_shape)
     _, params_Q_next = init_Q(in_shape)
 
