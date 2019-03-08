@@ -14,19 +14,17 @@ ALPHA = 0.001
 ACTION_SPACE = [0, 1, 2, 3, 4, 5]
 MEM_SIZE = 5000
 STACK_SIZE = 3  # number of consecutive frames to stack as input to the network
+NUM_GAMES = 50
+BATCH_SIZE = 32
 
 
 def preprocess(observation):
     return np.mean(observation[15:200, 30:125], axis=2)
 
 
-def store_transition(memory, mem_cnt, state, action, reward, state_):
-    if mem_cnt < MEM_SIZE:
-        memory.append([state, action, reward, state_])
-    else:
-        memory[mem_cnt % MEM_SIZE] = [state, action, reward, state_]
-    mem_cnt += 1
-    return memory, mem_cnt
+def store_transition(memory, state, action, reward, state_):
+    memory.append([state, action, reward, state_])
+    return memory
 
 
 def choose_action(observation, pred_Q, params_Q_eval, eps):
@@ -47,8 +45,7 @@ def stack_frames(frames):
 def main():
     env = gym.make('SpaceInvaders-v0')
 
-    memory = []
-    mem_cnt = 0
+    memory = deque(maxlen=MEM_SIZE)
 
     # fill memory with random interactions with the environment
     while len(memory) < MEM_SIZE:
@@ -65,13 +62,13 @@ def main():
                 reward = -100
             frames.append(preprocess(observation_))
             state_ = stack_frames(frames)
-            memory, mem_cnt = store_transition(memory, mem_cnt, state, action, reward, state_)
+            memory = store_transition(memory, state, action, reward, state_)
             state = state_
     print('done initializing memory')
 
     init_Q, pred_Q = DeepQNetwork()
 
-    # two separate Q-Table approximations (eval and next) for Double Q-Learning
+    # two separate Q-Table approximations (eval and next)
     # initialize parameters, not committing to a batch size (NHWC)
     # we choose 3 channels as we want to pass stacks of 3 consecutive frames
     in_shape = (-1, 185, 95, STACK_SIZE)
@@ -95,8 +92,6 @@ def main():
 
     scores = []
     eps_history = []
-    num_games = 50
-    batch_size = 2  # 32
 
     steps = 0
     eps = EPS_START
@@ -105,11 +100,11 @@ def main():
     def learn(j, params_Q_eval, params_Q_next):
         opt_state_Q_eval = opt_init(params_Q_eval)
 
-        if mem_cnt + batch_size < MEM_SIZE:
-            mem_start = int(onp.random.choice(range(mem_cnt)))
+        if len(memory) + BATCH_SIZE < MEM_SIZE:
+            mem_start = int(onp.random.choice(range(len(memory))))
         else:
-            mem_start = int(onp.random.choice(range(MEM_SIZE - batch_size - 1)))
-        mini_batch = memory[mem_start: mem_start + batch_size]
+            mem_start = int(onp.random.choice(range(MEM_SIZE - BATCH_SIZE - 1)))
+        mini_batch = memory[mem_start: mem_start + BATCH_SIZE]
 
         input_states = np.stack(tuple(mini_batch[:, 0][:]))
         next_states = np.stack(tuple(mini_batch[:, 3][:]))
@@ -129,7 +124,7 @@ def main():
 
         return params_Q_eval, params_Q_next
 
-    for i in range(num_games):
+    for i in range(NUM_GAMES):
         print('starting game ', i + 1, 'epsilon: %.4f' % eps)
         eps_history.append(eps)
         done = False
@@ -154,11 +149,9 @@ def main():
             state_ = stack_frames(frames)
             if done and info['ale.lives'] == 0:
                 reward = -100
-            memory, mem_cnt = store_transition(memory, mem_cnt, state,
-                                               action, reward, state_)
+            memory = store_transition(memory, state, action, reward, state_)
             state = state_
 
-            # TODO learn step
             params_Q_eval, params_Q_next = learn(j, params_Q_eval, params_Q_next)
             j += 1
 
