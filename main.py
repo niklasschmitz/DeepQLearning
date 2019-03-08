@@ -106,8 +106,8 @@ def main():
             mem_start = int(onp.random.choice(range(MEM_SIZE - BATCH_SIZE - 1)))
         mini_batch = memory[mem_start: mem_start + BATCH_SIZE]
 
-        input_states = np.stack(tuple(mini_batch[:, 0][:]))
-        next_states = np.stack(tuple(mini_batch[:, 3][:]))
+        input_states = np.stack([transition[0] for transition in mini_batch])
+        next_states = np.stack([transition[3] for transition in mini_batch])
 
         predicted_Q = pred_Q(params_Q_eval, input_states)
         predicted_Q_next = pred_Q(params_Q_next, next_states)
@@ -133,16 +133,9 @@ def main():
         frames.append(preprocess(observation))
         state = stack_frames(frames)
         score = 0
-        last_action = 0
         while not done:
             j = 0
-            # only choose an action at every 3rd frame
-            if len(frames) == 3:
-                action = choose_action(np.stack(frames), pred_Q, params_Q_eval, eps)
-                steps += 1
-                frames = []
-            else:
-                action = last_action
+            action = choose_action(state.reshape((1, 185, 95, STACK_SIZE)), pred_Q, params_Q_eval, eps)
             observation_, reward, done, info = env.step(action)
             score += reward
             frames.append(preprocess(observation))
@@ -161,7 +154,6 @@ def main():
                 else:
                     eps = EPS_END
 
-            last_action = action
         scores.append(score)
         print('score: ', score)
 
