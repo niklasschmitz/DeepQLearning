@@ -134,7 +134,9 @@ def main():
         eps_history.append(eps)
         done = False
         observation = env.reset()
-        frames = [preprocess(observation)]
+        frames = deque([np.zeros((185, 95)) for _ in range(STACK_SIZE)], maxlen=STACK_SIZE)
+        frames.append(preprocess(observation))
+        state = stack_frames(frames)
         score = 0
         last_action = 0
         while not done:
@@ -149,13 +151,12 @@ def main():
             observation_, reward, done, info = env.step(action)
             score += reward
             frames.append(preprocess(observation))
+            state_ = stack_frames(frames)
             if done and info['ale.lives'] == 0:
                 reward = -100
-            memory, mem_cnt = store_transition(memory, mem_cnt,
-                                               preprocess(observation),
-                                               action, reward,
-                                               preprocess(observation_))
-            observation = observation_
+            memory, mem_cnt = store_transition(memory, mem_cnt, state,
+                                               action, reward, state_)
+            state = state_
 
             # TODO learn step
             params_Q_eval, params_Q_next = learn(j, params_Q_eval, params_Q_next)
