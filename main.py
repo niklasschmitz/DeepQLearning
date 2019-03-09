@@ -16,6 +16,7 @@ MEM_SIZE = 5000
 STACK_SIZE = 3  # number of consecutive frames to stack as input to the network
 NUM_GAMES = 50
 BATCH_SIZE = 32
+TAU = 20  # replacement of Qnext
 
 
 def preprocess(observation):
@@ -100,6 +101,9 @@ def main():
 
     def learn(opt_step, opt_state, params_Q_eval, params_Q_next):
         mini_batch = sample(memory, BATCH_SIZE)
+
+        if opt_step % TAU == 0:
+            params_Q_next = params_Q_eval.copy()
 
         input_states = np.stack([transition[0] for transition in mini_batch])
         next_states = np.stack([transition[3] for transition in mini_batch])
