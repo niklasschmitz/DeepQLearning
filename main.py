@@ -28,11 +28,7 @@ def store_transition(memory, state, action, reward, state_):
 
 
 def sample(memory, batch_size):
-    indices = onp.random.choice(
-        onp.arange(len(memory)),
-        size=batch_size,
-        replace=False
-    )
+    indices = onp.random.choice(onp.arange(len(memory)), size=batch_size, replace=False)
     batch = [memory[i] for i in indices]
     return batch
 
@@ -86,6 +82,8 @@ def main():
     _, params_Q_next = init_Q(in_shape)
 
     opt_init, opt_update = optimizers.rmsprop(ALPHA)
+    opt_state = opt_init(params_Q_eval)
+    opt_step = 0
 
     # Define a simple squared-error loss
     def loss(params, batch):
@@ -100,16 +98,7 @@ def main():
         g = grad(loss)(params, batch)
         return opt_update(j, g, opt_state)
 
-    scores = []
-    eps_history = []
-
-    steps = 0
-    eps = EPS_START
-    learn_step_counter = 0
-
-    def learn(j, params_Q_eval, params_Q_next):
-        opt_state_Q_eval = opt_init(params_Q_eval)
-
+    def learn(opt_step, opt_state, params_Q_eval, params_Q_next):
         mini_batch = sample(memory, BATCH_SIZE)
 
         input_states = np.stack([transition[0] for transition in mini_batch])
@@ -124,10 +113,14 @@ def main():
         Q_target = onp.array(predicted_Q)
         Q_target[:, max_action] = rewards + GAMMA * np.max(predicted_Q_next, axis=1)
 
-        opt_state_Q_eval = step(j, opt_state_Q_eval, (input_states, Q_target))
-        params_Q_eval = optimizers.get_params(opt_state_Q_eval)
+        opt_state = step(opt_step, opt_state, (input_states, Q_target))
+        params_Q_eval = optimizers.get_params(opt_state)
 
-        return params_Q_eval, params_Q_next
+        return opt_state, params_Q_eval, params_Q_next
+
+    scores = []
+    eps_history = []
+    eps = EPS_START
 
     for i in range(NUM_GAMES):
         print('starting game ', i + 1, 'epsilon: %.4f' % eps)
@@ -139,7 +132,6 @@ def main():
         state = stack_frames(frames)
         score = 0
         while not done:
-            j = 0
             action = choose_action(state.reshape((1, 185, 95, STACK_SIZE)), pred_Q, params_Q_eval, eps)
             observation_, reward, done, info = env.step(action)
             score += reward
@@ -150,10 +142,11 @@ def main():
             memory = store_transition(memory, state, action, reward, state_)
             state = state_
 
-            params_Q_eval, params_Q_next = learn(j, params_Q_eval, params_Q_next)
-            j += 1
+            opt_state, params_Q_eval, params_Q_next = learn(opt_step, opt_state,
+                                                            params_Q_eval, params_Q_next)
+            opt_step += 1
 
-            if steps > 500:
+            if opt_step > 500:
                 if eps - 1e-4 > EPS_END:
                     eps -= 1e-4
                 else:
