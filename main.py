@@ -27,6 +27,16 @@ def store_transition(memory, state, action, reward, state_):
     return memory
 
 
+def sample(memory, batch_size):
+    indices = onp.random.choice(
+        onp.arange(len(memory)),
+        size=batch_size,
+        replace=False
+    )
+    batch = [memory[i] for i in indices]
+    return batch
+
+
 def choose_action(observation, pred_Q, params_Q_eval, eps):
     rand = onp.random.random()
     actions = pred_Q(params_Q_eval, observation)
@@ -100,11 +110,7 @@ def main():
     def learn(j, params_Q_eval, params_Q_next):
         opt_state_Q_eval = opt_init(params_Q_eval)
 
-        if len(memory) + BATCH_SIZE < MEM_SIZE:
-            mem_start = int(onp.random.choice(range(len(memory))))
-        else:
-            mem_start = int(onp.random.choice(range(MEM_SIZE - BATCH_SIZE - 1)))
-        mini_batch = memory[mem_start: mem_start + BATCH_SIZE]
+        mini_batch = sample(memory, BATCH_SIZE)
 
         input_states = np.stack([transition[0] for transition in mini_batch])
         next_states = np.stack([transition[3] for transition in mini_batch])
@@ -113,7 +119,7 @@ def main():
         predicted_Q_next = pred_Q(params_Q_next, next_states)
 
         max_action = np.argmax(predicted_Q_next, axis=1)
-        rewards = np.array(list(mini_batch[:, 2]))
+        rewards = np.array([transition[2] for transition in mini_batch])
 
         Q_target = onp.array(predicted_Q)
         Q_target[:, max_action] = rewards + GAMMA * np.max(predicted_Q_next[0])
