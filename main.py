@@ -122,9 +122,8 @@ def main():
         rewards = np.array([transition[2] for transition in mini_batch])
 
         Q_target = onp.array(predicted_Q)
-        Q_target[:, max_action] = rewards + GAMMA * np.max(predicted_Q_next[0])
+        Q_target[:, max_action] = rewards + GAMMA * np.max(predicted_Q_next, axis=1)
 
-        # batch = (inputs, targets)
         opt_state_Q_eval = step(j, opt_state_Q_eval, (input_states, Q_target))
         params_Q_eval = optimizers.get_params(opt_state_Q_eval)
 
