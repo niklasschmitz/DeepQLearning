@@ -22,6 +22,9 @@ TAU = 20  # replacement of Qnext
 LOAD = False  # load pretrained weights to continue training
 WEIGHTS_PATH = "weights"
 
+LEARN = True  # disable for evaluation without further training
+RENDER = False  # display the game during training
+
 
 def load_params(path):
     """ load pretrained params/weights of the DQN """
@@ -49,7 +52,7 @@ def choose_action(observation, pred_Q, params_Q_eval, eps):
     rand = onp.random.random()
     actions = pred_Q(params_Q_eval, observation)
     if rand < 1 - eps:
-        action = np.argmax(actions[1])
+        action = np.argmax(actions[0])
     else:
         action = onp.random.choice(ACTION_SPACE)
     return action
@@ -162,9 +165,13 @@ def main():
             memory = store_transition(memory, state, action, reward, state_)
             state = state_
 
-            opt_state, params_Q_eval, params_Q_next = learn(opt_step, opt_state,
-                                                            params_Q_eval, params_Q_next)
-            opt_step += 1
+            if LEARN:
+                opt_state, params_Q_eval, params_Q_next = learn(opt_step, opt_state,
+                                                                params_Q_eval, params_Q_next)
+                opt_step += 1
+
+            if RENDER:
+                env.render()
 
             if opt_step > 500:
                 if eps - 1e-4 > EPS_END:
