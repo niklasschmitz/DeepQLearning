@@ -3,6 +3,7 @@ from jax import jit, grad
 from jax.experimental import optimizers
 import numpy as onp
 import gym
+import os
 from collections import deque
 
 from model import DeepQNetwork
@@ -17,6 +18,16 @@ STACK_SIZE = 3  # number of consecutive frames to stack as input to the network
 NUM_GAMES = 50
 BATCH_SIZE = 32
 TAU = 20  # replacement of Qnext
+
+LOAD = False  # load pretrained weights to continue training
+WEIGHTS_PATH = "weights"
+
+
+def load_params(path):
+    """ load pretrained params/weights of the DQN """
+    p = onp.load(path)
+    q = [(np.array(t[0]), np.array(t[1])) if len(t) == 2 else () for t in p]
+    return q
 
 
 def preprocess(observation):
@@ -81,6 +92,11 @@ def main():
     in_shape = (-1, 185, 95, STACK_SIZE)
     _, params_Q_eval = init_Q(in_shape)
     _, params_Q_next = init_Q(in_shape)
+
+    if LOAD:
+        path = os.path.join(WEIGHTS_PATH, "params_Q_eval.npy")
+        params_Q_eval = load_params(path)
+        params_Q_next = params_Q_eval
 
     opt_init, opt_update = optimizers.rmsprop(ALPHA)
     opt_state = opt_init(params_Q_eval)
@@ -156,6 +172,8 @@ def main():
                 else:
                     eps = EPS_END
 
+        out_path = os.path.join(WEIGHTS_PATH, 'params_Q_eval_' + str(i))
+        onp.save(out_path, params_Q_eval)
         scores.append(score)
         print('score: ', score)
 
