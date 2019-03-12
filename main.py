@@ -16,14 +16,14 @@ ACTION_SPACE = [0, 1, 2, 3, 4, 5]
 MEM_SIZE = 5000
 STACK_SIZE = 3  # number of consecutive frames to stack as input to the network
 NUM_GAMES = 50
-BATCH_SIZE = 32
-TAU = 20  # replacement of Qnext
+BATCH_SIZE = 4
+TAU = 5  # replacement of Qnext
 
-LOAD = False  # load pretrained weights to continue training
+LOAD = True  # load pretrained weights to continue training
 WEIGHTS_PATH = "weights"
 
-LEARN = True  # disable for evaluation without further training
-RENDER = False  # display the game during training
+LEARN = False  # disable for evaluation without further training
+RENDER = True  # display the game during training
 
 
 def load_params(path):
@@ -143,7 +143,7 @@ def main():
 
     scores = []
     eps_history = []
-    eps = EPS_START
+    eps = EPS_START if LEARN else 0
 
     for i in range(NUM_GAMES):
         print('starting game ', i + 1, 'epsilon: %.4f' % eps)
@@ -158,29 +158,30 @@ def main():
             action = choose_action(state.reshape((1, 185, 95, STACK_SIZE)), pred_Q, params_Q_eval, eps)
             observation_, reward, done, info = env.step(action)
             score += reward
-            frames.append(preprocess(observation))
-            state_ = stack_frames(frames)
-            if done and info['ale.lives'] == 0:
-                reward = -100
-            memory = store_transition(memory, state, action, reward, state_)
-            state = state_
-
-            if LEARN:
-                opt_state, params_Q_eval, params_Q_next = learn(opt_step, opt_state,
-                                                                params_Q_eval, params_Q_next)
-                opt_step += 1
 
             if RENDER:
                 env.render()
 
-            if opt_step > 500:
-                if eps - 1e-4 > EPS_END:
-                    eps -= 1e-4
-                else:
-                    eps = EPS_END
+            if LEARN:
+                frames.append(preprocess(observation))
+                state_ = stack_frames(frames)
+                if done and info['ale.lives'] == 0:
+                    reward = -100
+                memory = store_transition(memory, state, action, reward, state_)
+                state = state_
+                opt_state, params_Q_eval, params_Q_next = learn(opt_step, opt_state,
+                                                                params_Q_eval, params_Q_next)
+                opt_step += 1
 
-        out_path = os.path.join(WEIGHTS_PATH, 'params_Q_eval_' + str(i))
-        onp.save(out_path, params_Q_eval)
+                if opt_step > 500:
+                    if eps - 1e-4 > EPS_END:
+                        eps -= 1e-4
+                    else:
+                        eps = EPS_END
+
+        if LEARN:
+            out_path = os.path.join(WEIGHTS_PATH, 'params_Q_eval_' + str(i))
+            onp.save(out_path, params_Q_eval)
         scores.append(score)
         print('score: ', score)
 
