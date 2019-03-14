@@ -8,12 +8,11 @@ from collections import deque
 
 from model import DeepQNetwork
 
-GAMMA = 0.95
-EPS_START = 1.0
+GAMMA = 0.95  # discount factor
+EPS_START = 1.0  # probability of performing a random action
 EPS_END = 0.05
-ALPHA = 0.001
-ACTION_SPACE = [0, 1, 2, 3, 4, 5]
-MEM_SIZE = 5000
+ALPHA = 0.001  # step size
+MEM_SIZE = 5000  # size of replay memory
 STACK_SIZE = 4  # number of consecutive frames to stack as input to the network
 NUM_GAMES = 50
 BATCH_SIZE = 4
@@ -22,8 +21,8 @@ TAU = 5  # replacement of Qnext
 LOAD = True  # load pretrained weights to continue training
 WEIGHTS_PATH = "weights"
 
-LEARN = False  # disable for evaluation without further training
-RENDER = True  # display the game during training
+LEARN = True  # disable for evaluation without further training
+RENDER = False  # display the game during training
 
 
 def load_params(path):
@@ -48,13 +47,13 @@ def sample(memory, batch_size):
     return batch
 
 
-def choose_action(observation, pred_Q, params_Q_eval, eps):
+def choose_action(env, observation, pred_Q, params_Q_eval, eps):
     rand = onp.random.random()
     actions = pred_Q(params_Q_eval, observation)
     if rand < 1 - eps:
         action = np.argmax(actions[0])
     else:
-        action = onp.random.choice(ACTION_SPACE)
+        action = env.action_space.sample()
     return action
 
 
@@ -155,7 +154,8 @@ def main():
         state = stack_frames(frames)
         score = 0
         while not done:
-            action = choose_action(state.reshape((1, 185, 95, STACK_SIZE)), pred_Q, params_Q_eval, eps)
+            action = choose_action(env, state.reshape((1, 185, 95, STACK_SIZE)),
+                                   pred_Q, params_Q_eval, eps)
             observation_, reward, done, info = env.step(action)
             score += reward
 
