@@ -79,8 +79,6 @@ def main():
             # 0 no action, 1 fire, 2 move right, 3 move left, 4 move right fire, 5 move left fire
             action = env.action_space.sample()
             observation_, reward, done, info = env.step(action)
-            if done and info['ale.lives'] == 0:
-                reward = -100
             frames.append(preprocess(observation_))
             state_ = stack_frames(frames)
             memory = store_transition(memory, state, action, reward, state_)
@@ -167,8 +165,6 @@ def main():
             if LEARN:
                 frames.append(preprocess(observation))
                 state_ = stack_frames(frames)
-                if done and info['ale.lives'] == 0:
-                    reward = -100
                 memory = store_transition(memory, state, action, reward, state_)
                 state = state_
                 opt_state, params_Q_eval, params_Q_next = learn(opt_step, opt_state,
