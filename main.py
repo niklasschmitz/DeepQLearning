@@ -93,14 +93,16 @@ def main():
     # initialize parameters, not committing to a batch size (NHWC)
     # we choose 3 channels as we want to pass stacks of 3 consecutive frames
     in_shape = (-1, 185, 95, STACK_SIZE)
-    _, params_Q_eval = init_Q(in_shape)
     _, params_Q_next = init_Q(in_shape)
 
     if LOAD:
         path = os.path.join(WEIGHTS_PATH, "params_Q_eval.npy")
         params_Q_eval = load_params(path)
-        params_Q_next = params_Q_eval
+    else:
+        _, params_Q_eval = init_Q(in_shape)
+    params_Q_next = params_Q_eval.copy()
 
+    # Initialize RMSProp optimizer
     opt_init, opt_update = optimizers.rmsprop(ALPHA)
     opt_state = opt_init(params_Q_eval)
     opt_step = 0
@@ -181,6 +183,7 @@ def main():
 
         if LEARN:
             out_path = os.path.join(WEIGHTS_PATH, 'params_Q_eval_' + str(i))
+
             onp.save(out_path, params_Q_eval)
         scores.append(score)
         print('score: ', score)
