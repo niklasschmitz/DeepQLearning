@@ -105,11 +105,11 @@ def main():
     opt_state = opt_init(params_Q_eval)
     opt_step = 0
 
-    # Define a simple squared-error loss
+    # Define a simple mean-squared-error loss
     def loss(params, batch):
         inputs, targets = batch
         predictions = pred_Q(params, inputs)
-        return np.sum((predictions - targets) ** 2)
+        return np.mean((predictions - targets) ** 2)
 
     # Define a compiled update step
     @jit
