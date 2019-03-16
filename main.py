@@ -88,10 +88,8 @@ def main():
 
     # two separate Q-Table approximations (eval and next)
     # initialize parameters, not committing to a batch size (NHWC)
-    # we choose 3 channels as we want to pass stacks of 3 consecutive frames
+    # we choose 3 channels as we want to pass stacks of 4 consecutive frames
     in_shape = (-1, 185, 95, STACK_SIZE)
-    _, params_Q_next = init_Q(in_shape)
-
     if LOAD:
         path = os.path.join(WEIGHTS_PATH, "params_Q_eval.npy")
         params_Q_eval = load_params(path)
